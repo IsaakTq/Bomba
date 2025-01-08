@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego de la Bomba</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #2c3e50;
+            overflow: hidden;
+        }
+
+        @keyframes breathing {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        .bomba {
+            width: 350px;
+            height: 350px;
+            background-image: url('https://i.pinimg.com/originals/2a/b0/7e/2ab07e38957555e0cf3c4102c0f6fde8.png');
+            background-size: cover;
+            margin-bottom: 20px;
+        }
+
+        .bomba.respirando {
+            animation: breathing 1s infinite;
+        }
+
+        .botones {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            width: 100px; /* Ancho y alto iguales para hacerlos circulares */
+            height: 100px;
+            font-size: 16px;
+            border: none;
+            border-radius: 50%; /* Hace el botón circular */
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s; /* Suavizar cambios */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        button:hover {
+            transform: scale(1.1); /* Efecto de aumento al pasar el mouse */
+        }
+
+        button#iniciar {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        button#iniciar:hover {
+            background-color: #2ecc71;
+        }
+
+        button#detener {
+            background-color: #c0392b;
+            color: white;
+        }
+
+        button#detener:hover {
+            background-color: #e74c3c;
+        }
+
+        .mensaje {
+            font-size: 20px;
+            color: white;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="bomba" id="bomba"></div>
+    <div class="botones">
+        <button id="iniciar">Iniciar</button>
+        <button id="detener" disabled>Detener</button>
+    </div>
+    <div class="mensaje" id="mensaje"></div>
+    <canvas id="canvas"></canvas>
+
+    <audio id="sonido-temporizador" src="sonidos/tiempo.mp3" loop></audio>
+    <audio id="sonido-explosion" src="sonidos/explosion.mp3"></audio>
+    <audio id="sonido-detener" src="sonidos/detener.mp3"></audio>
+
+    <script>
+        const bomba = document.getElementById('bomba');
+        const botonIniciar = document.getElementById('iniciar');
+        const botonDetener = document.getElementById('detener');
+        const mensaje = document.getElementById('mensaje');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const sonidoTemporizador = document.getElementById('sonido-temporizador');
+        const sonidoExplosion = document.getElementById('sonido-explosion');
+        const sonidoDetener = document.getElementById('sonido-detener');
+
+        let temporizador;
+        let bombaActiva = false;
+        let particulas = [];
+
+        const resizeCanvas = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        };
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const crearParticulas = (x, y, color, cantidad) => {
+            for (let i = 0; i < cantidad; i++) {
+                particulas.push({
+                    x,
+                    y,
+                    dx: (Math.random() - 0.5) * 10,
+                    dy: (Math.random() - 0.5) * 10,
+                    radius: Math.random() * 5 + 2,
+                    color,
+                    life: 4000
+                });
+            }
+        };
+
+        const dibujarParticulas = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particulas.forEach((p, index) => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+                p.x += p.dx;
+                p.y += p.dy;
+                p.life--;
+                if (p.life <= 0) {
+                    particulas.splice(index, 1);
+                }
+            });
+        };
+
+        const animarParticulas = () => {
+            dibujarParticulas();
+            if (particulas.length > 0) {
+                requestAnimationFrame(animarParticulas);
+            }
+        };
+
+        const explosion = () => {
+            const rect = bomba.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            crearParticulas(x, y, 'orange', 50);
+            crearParticulas(x, y, 'red', 50);
+            crearParticulas(x, y, 'yellow', 50);
+            animarParticulas();
+            mensaje.textContent = "¡Boom! La bomba explotó.";
+            sonidoExplosion.play();
+        };
+
+        const confeti = () => {
+            for (let i = 0; i < 200; i++) {
+                crearParticulas(
+                    Math.random() * canvas.width,
+                    Math.random() * canvas.height,
+                    `hsl(${Math.random() * 360}, 100%, 50%)`,
+                    1
+                );
+            }
+            animarParticulas();
+            mensaje.textContent = "¡Felicidades! Lograste detener la bomba.";
+            sonidoDetener.play();
+        };
+
+        const reiniciarJuego = () => {
+            clearTimeout(temporizador);
+            botonIniciar.disabled = false;
+            botonDetener.disabled = true;
+            bombaActiva = false;
+            sonidoTemporizador.pause();
+            sonidoTemporizador.currentTime = 0;
+        };
+
+        botonIniciar.addEventListener('click', () => {
+            if (bombaActiva) return; // Evitar iniciar múltiples veces
+
+            bombaActiva = true;
+            botonIniciar.disabled = true;
+            botonDetener.disabled = false;
+            mensaje.textContent = "";
+
+            sonidoTemporizador.play();
+
+            // Agregar el efecto de respiración
+            bomba.classList.add('respirando');
+
+            temporizador = setTimeout(() => {
+                if (bombaActiva) {
+                    explosion();
+                    reiniciarJuego();
+                }
+            }, 30000); // Temporizador de 3 segundos
+        });
+
+        botonDetener.addEventListener('click', () => {
+            if (!bombaActiva) return; // Evitar detener si no está activa
+
+            clearTimeout(temporizador);
+            bombaActiva = false;
+
+            // Quitar el efecto de respiración
+            bomba.classList.remove('respirando');
+
+            confeti();
+            reiniciarJuego();
+        });
+    </script>
+</body>
+</html>
